@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>5. 메모리 뉴스 트래커</title>
+<style>
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css");
+
+:root {
+    --main-color: #355070;
+    --bg-color: #F4F6F8;
+    --surface-color: #FFFFFF;
+    --text-main: #333333;
+    --text-sub: #666666;
+    --border-color: #C5C5C5;
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-pill: 999px;
+    --accent-mint: #DDE8ED;
+    --col-red:    #C0392B;
+    --col-orange: #D97706;
+    --col-blue:   #1967D2;
+    --col-green:  #1E8E3E;
+    --col-purple: #6D28D9;
+}
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    font-family: 'Pretendard', -apple-system, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-main);
+    font-size: 15px;
+    line-height: 1.6;
+}
+
+/* ── 헤더 ── */
+.header {
+    height: 60px;
+    background-color: var(--main-color);
+    border-bottom: 1px solid var(--border-color);
+    display: flex; align-items: center;
+    padding: 0 24px;
+    position: sticky; top: 0; z-index: 100;
+    justify-content: space-between;
+}
+.header-logo { font-size: 20px; font-weight: 700; color: #fff; letter-spacing: -0.3px; }
+.header-right { font-size: 13px; color: rgba(255,255,255,0.72); }
+
+/* ── 탭 내비게이션 (스크린샷 스타일) ── */
+.tab-nav {
+    background-color: var(--surface-color);
+    border-bottom: 2px solid var(--border-color);
+    display: flex;
+    padding: 0 24px;
+    gap: 0;
+}
+.tab-item {
+    padding: 13px 22px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-sub);
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    display: flex; align-items: center; gap: 7px;
+    transition: color 0.15s;
+    user-select: none;
+    white-space: nowrap;
+}
+.tab-item:hover { color: var(--text-main); }
+.tab-item.active {
+    color: var(--main-color);
+    border-bottom-color: var(--main-color);
+    font-weight: 700;
+}
+.tab-content { display: none; }
+.tab-content.active { display: flex; flex-direction: column; gap: 16px; }
+
+/* ── 레이아웃 ── */
+.container {
+    max-width: 1280px;
+    margin: 20px auto;
+    padding: 0 24px;
+}
+
+/* ── 카드 ── */
+.card {
+    background-color: var(--surface-color);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    padding: 20px 24px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+}
+.card-title {
+    font-size: 16px; font-weight: 700;
+    margin: 0 0 14px; color: var(--text-main);
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 10px;
+}
+
+/* ── KPI — 카드별 컬러 ── */
+.kpi-grid { display: flex; gap: 14px; }
+.kpi-item {
+    flex: 1; padding: 16px 18px;
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    display: flex; flex-direction: column; justify-content: space-between;
+    min-height: 100px;
+}
+.kpi-item.c-blue   { border-top: 3px solid var(--col-blue); }
+.kpi-item.c-orange { border-top: 3px solid var(--col-orange); }
+.kpi-item.c-green  { border-top: 3px solid var(--col-green); }
+.kpi-label { font-size: 13px; color: var(--text-sub); margin-bottom: 6px; }
+.kpi-value { font-size: 28px; font-weight: 700; margin: 0; }
+.kpi-value.c-blue   { color: var(--col-blue); }
+.kpi-value.c-orange { color: var(--col-orange); }
+.kpi-value.c-green  { color: var(--col-green); }
+
+/* ── 알림 배너 (스크린샷 노란 배너) ── */
+.alert-banner {
+    background-color: #FFFBEA;
+    border: 1px solid #F6D860;
+    border-left: 4px solid var(--col-orange);
+    border-radius: var(--radius-md);
+    padding: 11px 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-main);
+    flex-wrap: wrap;
+}
+.alert-icon { font-size: 16px; flex-shrink: 0; }
+.alert-banner strong { color: var(--col-orange); }
+
+/* ── 종합 인사이트 ── */
+.summary-box { display: flex; flex-direction: column; gap: 8px; }
+.summary-line {
+    font-size: 14px; color: var(--text-main); line-height: 1.65;
+    padding: 10px 14px;
+    background-color: var(--bg-color);
+    border-left: 4px solid var(--main-color);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.summary-line strong { color: var(--main-color); }
+
+/* ── 배지 ── */
+.badge {
+    display: inline-block; padding: 3px 9px;
+    border-radius: var(--radius-pill);
+    font-size: 12px; font-weight: 600;
+}
+.badge-success { background-color: #E6F4EA; color: #1E8E3E; }
+.badge-pending { background-color: #E8F0FE; color: #1967D2; }
+
+/* ── 초이스 칩 ── */
+.flex-gap { display: flex; gap: 8px; flex-wrap: wrap; }
+.choice-chip {
+    padding: 5px 14px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--border-color);
+    background-color: var(--surface-color);
+    color: var(--text-sub); font-size: 13px; cursor: default;
+}
+.choice-chip.active {
+    background-color: var(--main-color); color: #fff;
+    border-color: var(--main-color); font-weight: 600;
+}
+
+/* ── 뉴스 2열 그리드 ── */
+.news-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+.news-item {
+    display: flex; flex-direction: column; gap: 8px;
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 15px;
+}
+.news-item-header { display: flex; align-items: flex-start; gap: 10px; }
+.news-rank {
+    width: 32px; height: 32px; flex-shrink: 0;
+    border-radius: var(--radius-sm);
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; color: var(--main-color);
+}
+.news-rank.top { background-color: var(--main-color); color: #fff; border-color: var(--main-color); }
+.news-title {
+    font-size: 14px; font-weight: 700;
+    color: var(--text-main); text-decoration: none;
+    line-height: 1.45; flex: 1;
+}
+.news-title:hover { color: var(--main-color); text-decoration: underline; }
+.news-meta { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.news-date { font-size: 12px; color: var(--text-sub); }
+.news-snippet {
+    font-size: 13px; color: var(--text-sub);
+    margin: 0; line-height: 1.6;
+}
+
+/* ── 당사 인사이트 바 ── */
+.insight-bar {
+    display: flex; align-items: flex-start; gap: 8px;
+    background-color: #E8F0FE;
+    border-left: 3px solid var(--col-blue);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 7px 12px;
+}
+.insight-label {
+    font-size: 11px; font-weight: 700; color: var(--col-blue);
+    white-space: nowrap; padding-top: 2px; flex-shrink: 0;
+}
+.insight-text { font-size: 13px; color: var(--text-main); line-height: 1.55; }
+.insight-text strong { color: var(--col-blue); }
+
+.news-link-btn {
+    font-size: 12px; font-weight: 600;
+    color: var(--main-color); text-decoration: none;
+    border: 1px solid var(--main-color);
+    padding: 4px 12px; border-radius: var(--radius-sm);
+    display: inline-block; align-self: flex-start;
+    transition: opacity 0.2s; margin-top: auto;
+}
+.extra-sources {
+    margin: 6px 0 4px;
+    padding: 6px 10px;
+    background: var(--bg-color);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+}
+.extra-sources-label {
+    font-size: 11px; font-weight: 600;
+    color: var(--text-sub); display: block; margin-bottom: 4px;
+}
+.extra-sources-links {
+    display: flex; flex-direction: column; gap: 3px;
+}
+.extra-source-link {
+    font-size: 12px; color: var(--main-color);
+    text-decoration: none; line-height: 1.4;
+}
+.extra-source-link:hover { text-decoration: underline; }
+.extra-source-link {
+    color: var(--col-blue); text-decoration: none; font-weight: 600;
+}
+.extra-source-link:hover { text-decoration: underline; }
+.news-link-btn:hover { opacity: 0.75; }
+
+/* ── 형광펜 하이라이트 ── */
+mark.hl {
+    background-color: #FFE066;
+    color: inherit;
+    padding: 0 2px;
+    border-radius: 2px;
+    font-weight: 600;
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+    <span class="header-logo">메모리 뉴스 트래커</span>
+    <span class="header-right">최종 업데이트: 2026-07-08 07:32 &nbsp;|&nbsp; 매일 오전 8시 자동 갱신</span>
+</div>
+
+<!-- 탭 내비게이션 -->
+<div class="tab-nav">
+    <div class="tab-item active">
+        📊&nbsp; 핵심 요약
+    </div>
+</div>
+
+<div class="container" style="padding-top:20px; padding-bottom:32px; display:flex; flex-direction:column; gap:16px;">
+
+    <!-- KPI 컬러 카드 -->
+    <div class="kpi-grid">
+        <div class="kpi-item c-blue">
+            <span class="kpi-label">오늘 수집 기사 (1일 이내)</span>
+            <span class="kpi-value c-blue">16건</span>
+        </div>
+        <div class="kpi-item c-orange">
+            <span class="kpi-label">모니터링 키워드</span>
+            <span class="kpi-value c-orange">40개</span>
+        </div>
+        <div class="kpi-item c-green">
+            <span class="kpi-label">업데이트 일시</span>
+            <span class="kpi-value c-green" style="font-size:16px; padding-top:4px;">2026-07-08 07:32</span>
+        </div>
+    </div>
+
+    <!-- 알림 배너 -->
+    <div class="alert-banner">
+        <span class="alert-icon">⚡</span>
+        <span>금일 주요 키워드 &nbsp;
+            <strong>LPDDR</strong> &nbsp;·&nbsp;
+            <strong>HBM</strong> &nbsp;·&nbsp;
+            <strong>DRAM</strong> &nbsp;·&nbsp;
+            <strong>NAND/UFS</strong> &nbsp;
+            기사 집중 수집 완료 — 아래 인사이트 및 기사 목록 확인
+        </span>
+    </div>
+
+    <!-- 종합 인사이트 -->
+    <div class="card">
+        <p class="card-title">모바일 메모리 구매팀 종합 인사이트</p>
+        <div class="summary-box">
+            <div class="summary-line">① 가격 동향 — LPDDR·NAND·UFS <mark class="hl">가격 동반 상승세 지속</mark> → 모바일 메모리 전 품목 BOM 원가 압박 확대, LPDDR·UFS 분기 계약 물량 조기 확보 및 중장기 계약 점검</div><div class="summary-line">② 수급 현황 — 애플, <mark class="hl">中 메모리(CXMT·YMTC) 공급 다변화 검토</mark> → 삼성·SK의 Apple향 물량 일부 이탈 가능 → MX사업부 LPDDR·UFS 공급 우선순위 및 단가 협상 여건 변화 모니터링</div><div class="summary-line">③ 구조적 변화 — <mark class="hl">중국 메모리 업체(CXMT 등) 공급 확대 가시화</mark> → 삼성·SK 독점 공급 구조 완화 가능성, 가격 벤치마크 및 조달 다변화 시나리오 사전 검토</div>
+        </div>
+    </div>
+
+    <!-- 기사 TOP 20 -->
+    <div class="card">
+        <p class="card-title">주요 기사 TOP 16</p>
+        <div class="news-grid">
+            
+            <div class="news-item">
+                <div class="news-item-header">
+                    <span class="news-rank top">#1</span>
+                    <a href="https://www.weeklypost.kr/news/articleView.html?idxno=11586" target="_blank" rel="noopener" class="news-title">렉사, CXMT 기반 DDR5-7600 메모리 출시… 중국산 DDR5 고클록 시대 열리나</a>
+                </div>
+                <div class="news-meta">
+                    <span class="badge badge-pending">위클리포스트</span>
+                    <span class="news-date">8시간 전</span>
+                    <span class="badge badge-success">낸드</span><span class="badge badge-success">메모리</span><span class="badge badge-success">Memory</span>
+                </div>
+                <p class="news-snippet">렉사가 중국 메모리 업체 CXMT(ChangXin Memory Technologies) 낸드 기반의 DDR5 메모리를 공개했다. 기존 6000MT/s 수준에 머물던 중국산 DDR5 메모리가 처음으로...</p>
+                <div class="insight-bar">
+                    <span class="insight-label">당사 인사이트</span>
+                    <span class="insight-text"><strong>NAND</strong> 업황 변화 → 스마트폰 <strong>UFS</strong> 조달 전략 수립 시 <strong>TrendForce</strong> 데이터와 병행 참고</span>
+                </div>
+                <div class="extra-sources"><span class="extra-sources-label">관련 기사 (1건)</span><div class="extra-sources-links"><a href="https://www.digitaltoday.co.kr/news/articleView.html?idxno=681974" target="_blank" rel="noopener" class="extra-source-link">📎 디지털투데이 — 삼성·SK하닉 대항마 뜨나…中 CXMT 메모리 DDR5…</a></div></div>
+                <a href="https://www.weeklypost.kr/news/articleView.html?idxno=11586" target="_blank" rel="noopener" class="news-link-btn">원문 보기 →</a>
+            </div>
+            <div class="news-item">
+                <div class="news-item-header">
+                    <span class="news-rank top">#2</span>
+                    <a href="https://www.inews24.com/view/1983000" target="_blank" rel="noopener" class="news-title">키옥시아 &quot;몇 년 걸려도 낸드 1위 탈환&quot;…삼성전자·SK하이닉스에 도전</a>
+                </div>
+                <div class="news-meta">
+                    <span class="badge badge-pending">아이뉴스24</span>
+                    <span class="news-date">23시간 전</span>
+                    <span class="badge badge-success">낸드</span><span class="badge badge-success">SK하이닉스</span><span class="badge badge-success">메모리</span>
+                </div>
+                <p class="news-snippet">세계 첫 낸드 개발 기업, 주총서 성장 비전 제시 차세대 낸드 양산·설비투자로 경쟁력 강화 일본 메모리 반도체 업체 키옥시아가 삼성전자와 SK하이닉스를 제치고...</p>
+                <div class="insight-bar">
+                    <span class="insight-label">당사 인사이트</span>
+                    <span class="insight-text"><strong>NAND</strong> <strong>가격</strong> <strong>상승</strong>세 지속으로 <strong>UFS</strong> 원가 압박 확대 → 중장기 계약 비중 확대 및 <strong>재고</strong> 수준 점검</span>
+                </div>
+                <div class="extra-sources"><span class="extra-sources-label">관련 기사 (2건)</span><div class="extra-sources-links"><a href="https://www.ytn.co.kr/_ln/0102_202607071439476043" target="_blank" rel="noopener" class="extra-source-link">📎 YTN — 삼성전자, 2분기 영업이익으로 세계 1위...89.4조…</a><a href="https://www.donga.com/news/Economy/article/all/20260708/134255372/2" target="_blank" rel="noopener" class="extra-source-link">📎 동아일보 — 삼성전자 영업익 89조, 엔비디아 넘어 세계 1위…</a></div></div>
+                <a href="https://www.inews24.com/view/1983000" target="_blank" rel="noopener" class="news-link-btn">원문 보기 →</a>
+            </div>
+            <div class="news-item">
+                <div class="news-item-header">
+                    <span class="news-rank top">#3</span>
+                    <a href="https://www.hankyung.com/amp/202607079241i" target="_blank" rel="noopener" class="news-title">AI 메모리가 이끈 독주…삼성전자, 역대급 수익성으로 ‘슈퍼사이클’ 증명</a>
+                </div>
+                <div class="news-meta">
+                    <span class="badge badge-pending">한국경제</span>
+                    <span class="news-date">23시간 전</span>
+                    <span class="badge badge-success">DRAM</span><span class="badge badge-success">NAND</span><span class="badge badge-success">메모리</span>
+                </div>
+                <p class="news-snippet">DRAM·NAND 가격 폭등…삼성전자, 3분기 연속 실적 정점 경신. HBM4 선제 출하 통했다…삼성전자 DS 부문이 견인한 역대급 2분기 삼성전자 2분기 '빛과 그림자'…</p>
+                <div class="insight-bar">
+                    <span class="insight-label">당사 인사이트</span>
+                    <span class="insight-text"><strong>HBM</strong> 동향이 <strong>공급</strong>사 <strong>Capa</strong> 배분에 영향 → <strong>LP<strong>DDR</strong></strong>·<strong>UFS</strong> <strong>수급</strong> 여력 변화 주기적 모니터링 필요</span>
+                </div>
+                
+                <a href="https://www.hankyung.com/amp/202607079241i" target="_blank" rel="noopener" class="news-link-btn">원문 보기 →</a>
+            </div>
+            <div class="news-item">
+                <div class="news-item-header">
+                    <span class="news-rank">#4</span>
+                    <a href="https://www.weeklypost.kr/news/articleView.html?idxno=11588" target="_blank" rel="noopener" class="news-title">ADATA &quot;3분기 DRAM 최대 30%·낸드 최대 40% 인상&quot;</a>
+                </div>
+                <div class="news-meta">
+                    <span class="badge badge-pending">위클리포스트</span>
+                    <span class="news-date">7시간 전</span>
+                    <span class="badge badge-success">DRAM</span><span class="badge badge-success">낸드</span><span class="badge badge-success">메모리</span>
+                </div>
+                <p class="news-snippet">메모리와 SSD 가격 상승세가 3분기에도 이어질 전망이다. ADATA는 AI 시장 수요 증가로 DRAM과 낸드플래시 가격이 큰 폭으로 오를 것으로 예상했다.</p>
+                <div class="insight-bar">
+                    <span class="insight-label">당사 인사이트</span>
+                    <span class="insight-text"><strong>NAND</strong> <strong>가격</strong> <strong>상승</strong>세 지속으로 <strong>UFS</strong> 원가 압박 확대 → 중장기 계약 비중 확대 및 <strong>재고</strong> 수준 점검</span>
+                </div>
+                
+                <a href="https://www.weeklypost.kr/news/articleView.html?idxno=11588" target="_blank" rel="noopener" class="news-link-btn">원문 보기 →</a>
+            </div>
+            <div class="news-item">
+                <div class="news-item-header">
+                    <span class="news-rank">#5</span>
+                    <a href="https://www.autodaily.co.kr/news/articleViewAmp.html?idxno=545513" target="_blank" rel="noopener" class="news-title">中 CXMT, 올해 웨이퍼 생산능력 월 35만장 마이크론 턱밑. SK하이닉스.삼전도 긴장</a>
+                </div>
+                <div class="news-meta">
+                    <span class="badge badge-pending">엠투데이</span>
+                    <span class="news-date">24시간 전</span>
+                    <span class="badge badge-success">DRAM</span><span class="badge badge-success">마이크론</span><span class="badge badge-success">SK하이닉스</span>
+                </div>
+                <p class="news-snippet">중국 최대 D램(DRAM) 제조업체인 CXMT(ChangXin Memory Technologies)가 공격적인 생산능력 확대와 기업공개(IPO)를 앞세워 글로벌 메모리 시장...</p>
+                <div class="insight-bar">
+                    <span class="insight-label">당사 인사이트</span>
+                    <span class="insight-text"><strong>DRAM</strong> <strong>가격</strong> <strong>상승</strong>으로 <strong>LP<strong>DDR</strong></strong> <strong>단가</strong> 선행 반영 가능성 높음 → 구매 일정 <strong>조기화</strong> 및 물량 선점 검토</span>
+                </div>
+                
+                <a href="https://www.autodaily.co.kr/news/articleViewAmp.html?idxno=545513" target="_blank" rel="noopener" class="news-link-btn">원문 보기 →</a>
+            </div>
+            <div class="news-item">
+                <div class="news-item-header">
+                    <span class="news-rank">#6</span>
+                    <a href="https://www.weeklypost.kr/news/articleView.html?idxno=11585" target="_blank" rel="noopener" class="news-title">MSI, AM5 메인보드에 CXMT DDR5 지원… 최대 8200MT/s 동작</a>
+                </div>
+                <div class="news-meta">
+                    <span class="badge badge-pending">위클리포스트</span>
+                    <span class="news-date">8시간 전</span>
+                    <span class="badge badge-success">메모리</span><span class="badge badge-success">Memory</span><span class="badge badge-success">CXMT</span>
+                </div>
+                <p class="news-snippet">MSI가 중국 시장 전용 AM5 메인보드 BIOS를 통해 중국 메모리 업체 CXMT(ChangXin Memory Technologies)의 DDR5 메모리 지원을 강화했다. 기존 6800MT/s 수준에 머물던...</p>
+                <div class="insight-bar">
+                    <span class="insight-label">당사 인사이트</span>
+                    <span class="insight-text"><strong>DRAM</strong> 시황 변화 → <strong>LP<strong>DDR</strong></strong> <strong>가격</strong> 방향성 영향, 서버 <strong>DRAM</strong> 동향을 선행 지표로 참고</span>
+                </div>
+                
+                <a href="https://www.weeklypost.kr/news/articleView.html?idxno=11585" target="_blank" rel="noopener" class="news-link-btn">원문 보기 →</a>
+            </div>
+            <div class="news-item">
+                <div class="news-item-header">
+                    <span class="news-rank">#7</span>
+                    <a href="https://contents.premium.naver.com/goberny/mijucen/contents/260707114719115nt" target="_blank" rel="noopener" class="news-title">삼성전자, 마이크론 어닝 서프라이즈!, 그래도 지금은 매수금지!</a>
+                </div>
+                <div class="news-meta">
+                    <span class="badge badge-pending">네이버 프리미엄콘텐츠</span>
+                    <span class="news-date">20시간 전</span>
+                    <span class="badge badge-success">DRAM</span><span class="badge badge-success">NAND</span><span class="badge badge-success">마이크론</span>
+                </div>
+                <p class="news-snippet">삼성전자, 역대급 어닝 서프라이즈. 매출 171조 원, 영업이익 89.4조 원. 전년 동기 대비 영업이익이 19배 가까이 증가했고, AI 메모리 수요와 DRAM·NAND 가격 급등이...</p>
+                <div class="insight-bar">
+                    <span class="insight-label">당사 인사이트</span>
+                    <span class="insight-text"><strong>NAND</strong> <strong>가격</strong> <strong>상승</strong>세 지속으로 <strong>UFS</strong> 원가 압박 확대 → 중장기 계약 비중 확대 및 <strong>재고</strong> 수준 점검</span>
+                </div>
+                <div class="extra-sources"><span class="extra-sources-label">관련 기사 (2건)</span><div class="extra-sources-links"><a href="https://news2day.co.kr/article/20260708500001" target="_blank" rel="noopener" class="extra-source-link">📎 뉴스투데이 — [마켓인사이드] 삼성전자 쇼크에 마이크론, AMD 등 …</a><a href="https://mobile.newsis.com/view_amp.html?ar_id=NISX20260707_0003698469" target="_blank" rel="noopener" class="extra-source-link">📎 뉴시스 — 삼성, 2분기 어닝 서프라이즈…갤럭시 스마트폰도 많이 …</a></div></div>
+                <a href="https://contents.premium.naver.com/goberny/mijucen/contents/260707114719115nt" target="_blank" rel="noopener" class="news-link-btn">원문 보기 →</a>
+            </div>
+            <div class="news-item">
+                <div class="news-item-header">
+                    <span class="news-rank">#8</span>
+                    <a href="https://www.techm.kr/news/articleView.html?idxno=153184" target="_blank" rel="noopener" class="news-title">[글로벌] 뱅크오브아메리카 '애플의 CXMT D램 검토, 가격 협상 카드일 것'</a>
+                </div>
+                <div class="news-meta">
+                    <span class="badge badge-pending">테크M</span>
+                    <span class="news-date">15시간 전</span>
+                    <span class="badge badge-success">메모리</span><span class="badge badge-success">CXMT</span><span class="badge badge-success">가격</span>
+                </div>
+                <p class="news-snippet">애플이 중국 메모리 업체 'CXMT'의 D램 도입을 검토하는 것에 대해, 실제 대량 채택보다 기존 메모리 공급사와의 가격 협상력을 높이기 위한 목적이라는 분석이...</p>
+                <div class="insight-bar">
+                    <span class="insight-label">당사 인사이트</span>
+                    <span class="insight-text">메모리 업황 참고 → 주간 시황 보고 및 분기 구매 계획 수립 시 배경 자료로 활용</span>
+                </div>
+                
+                <a href="https://www.techm.kr/news/articleView.html?idxno=153184" target="_blank" rel="noopener" class="news-link-btn">원문 보기 →</a>
+            </div>
+            <div class="news-item">
+                <div class="news-item-header">
+                    <span class="news-rank">#9</span>
+                    <a href="https://zdnet.co.kr/view/?no=20260707160246" target="_blank" rel="noopener" class="news-title">YMTC, 레노버 일부 노트북에 QLC SSD 공급</a>
+                </div>
+                <div class="news-meta">
+                    <span class="badge badge-pending">지디넷코리아</span>
+                    <span class="news-date">14시간 전</span>
+                    <span class="badge badge-success">낸드</span><span class="badge badge-success">메모리</span><span class="badge badge-success">YMTC</span>
+                </div>
+                <p class="news-snippet">낸드 플래시메모리 공급난과 가격 상승 속 중국 제조사 '양쯔메모리테크놀로지(YMTC)'가 존재감을 키우고 있다. 최근 국내 일반 소비자용 SSD 시장에 진출한 데 이어...</p>
+                <div class="insight-bar">
+                    <span class="insight-label">당사 인사이트</span>
+                    <span class="insight-text"><strong>NAND</strong> <strong>가격</strong> <strong>상승</strong>세 지속으로 <strong>UFS</strong> 원가 압박 확대 → 중장기 계약 비중 확대 및 <strong>재고</strong> 수준 점검</span>
+                </div>
+                
+                <a href="https://zdnet.co.kr/view/?no=20260707160246" target="_blank" rel="noopener" class="news-link-btn">원문 보기 →</a>
+            </div>
+            <div class="news-item">
+                <div class="news-item-header">
+                    <span class="news-rank">#10</span>
+                    <a href="https://www.edaily.co.kr/News/Read?newsId=01230006645512552&amp;mediaCodeNo=257" target="_blank" rel="noopener" class="news-title">마이크론, 삼성 호실적에도 7% 급락…메모리 고점론 부각</a>
+                </div>
+                <div class="news-meta">
+                    <span class="badge badge-pending">이데일리</span>
+                    <span class="news-date">7시간 전</span>
+                    <span class="badge badge-success">마이크론</span><span class="badge badge-success">메모리</span><span class="badge badge-success">삼성전자</span>
+                </div>
+                <p class="news-snippet">미국 메모리 반도체 업체 마이크론 주가가 7일(현지시간) 장중 7% 넘게 급락했다. 경쟁사인 삼성전자가 시장 예상치를 웃도는 2분기 잠정 실적을 발표했지만,...</p>
+                <div class="insight-bar">
+                    <span class="insight-label">당사 인사이트</span>
+                    <span class="insight-text">경쟁 <strong>공급</strong>사(Micron·Kioxia·SanDisk) 실적 압박 → <strong>단가</strong> 인하 <strong>협상</strong> 여력 발생, 계약 시점 조율 검토</span>
+                </div>
+                <div class="extra-sources"><span class="extra-sources-label">관련 기사 (2건)</span><div class="extra-sources-links"><a href="https://www.koreajoongangdaily.com/business/bandoche-eobgyebuteo-aipon-iyongjakkajinbsptim-kug-memoli-baleone-maikeulon-pyeon-deun-hangugindeul/12759075" target="_blank" rel="noopener" class="extra-source-link">📎 Korea JoongAng Daily — 반도체 업계부터 아이폰 이용자까지… 팀 쿡 &#x27;메모리 발…</a><a href="https://www.leadeconomy.co.kr/news/articleView.html?idxno=8523" target="_blank" rel="noopener" class="extra-source-link">📎 리드경제 — &#x27;삼성 쇼크&#x27;에 글로벌 AI칩 투매…마이크론 6% 급락…</a></div></div>
+                <a href="https://www.edaily.co.kr/News/Read?newsId=01230006645512552&amp;mediaCodeNo=257" target="_blank" rel="noopener" class="news-link-btn">원문 보기 →</a>
+            </div>
+            <div class="news-item">
+                <div class="news-item-header">
+                    <span class="news-rank">#11</span>
+                    <a href="https://www.weeklypost.kr/news/articleView.html?idxno=11587" target="_blank" rel="noopener" class="news-title">인텔, 차세대 메모리 'XBM' 특허 공개… HBM4 대체</a>
+                </div>
+                <div class="news-meta">
+                    <span class="badge badge-pending">위클리포스트</span>
+                    <span class="news-date">8시간 전</span>
+                    <span class="badge badge-success">DRAM</span><span class="badge badge-success">메모리</span><span class="badge badge-success">Memory</span>
+                </div>
+                <p class="news-snippet">인텔이 차세대 초고대역폭 메모리 기술인 XBM(Cross-Batch Memory) 특허를 공개했다. HBM4를 대체하는 것을 목표로 UCIe 인터페이스와 새로운 DRAM 설계를 적용해 더...</p>
+                <div class="insight-bar">
+                    <span class="insight-label">당사 인사이트</span>
+                    <span class="insight-text"><strong>HBM</strong> 동향이 <strong>공급</strong>사 <strong>Capa</strong> 배분에 영향 → <strong>LP<strong>DDR</strong></strong>·<strong>UFS</strong> <strong>수급</strong> 여력 변화 주기적 모니터링 필요</span>
+                </div>
+                
+                <a href="https://www.weeklypost.kr/news/articleView.html?idxno=11587" target="_blank" rel="noopener" class="news-link-btn">원문 보기 →</a>
+            </div>
+            <div class="news-item">
+                <div class="news-item-header">
+                    <span class="news-rank">#12</span>
+                    <a href="https://www.mt.co.kr/amp/tech/2026/07/08/2026070714095198414" target="_blank" rel="noopener" class="news-title">삼성·SK 메모리값 치솟자…PC 업계, 중국산으로 눈 돌린다 [IT썰] - 머니투데이</a>
+                </div>
+                <div class="news-meta">
+                    <span class="badge badge-pending">머니투데이</span>
+                    <span class="news-date">2시간 전</span>
+                    <span class="badge badge-success">낸드</span><span class="badge badge-success">SK하이닉스</span><span class="badge badge-success">메모리</span>
+                </div>
+                <p class="news-snippet">AI(인공지능) 서버용 메모리 수요 급증으로 삼성전자와 SK하이닉스의 D램·낸드플래시 가격이 치솟자 글로벌 PC 제조사들이 중국산 메모리로 눈을 돌리고 있다.</p>
+                <div class="insight-bar">
+                    <span class="insight-label">당사 인사이트</span>
+                    <span class="insight-text"><strong>NAND</strong> 업황 변화 → 스마트폰 <strong>UFS</strong> 조달 전략 수립 시 <strong>TrendForce</strong> 데이터와 병행 참고</span>
+                </div>
+                
+                <a href="https://www.mt.co.kr/amp/tech/2026/07/08/2026070714095198414" target="_blank" rel="noopener" class="news-link-btn">원문 보기 →</a>
+            </div>
+            <div class="news-item">
+                <div class="news-item-header">
+                    <span class="news-rank">#13</span>
+                    <a href="https://www.newsis.com/view/NISX20260707_0003699570" target="_blank" rel="noopener" class="news-title">글로벌 메모리 빅3 '영업이익률 80% 시대' 열렸다…&quot;공급자 우위 시장 강화&quot;</a>
+                </div>
+                <div class="news-meta">
+                    <span class="badge badge-pending">뉴시스</span>
+                    <span class="news-date">2시간 전</span>
+                    <span class="badge badge-success">메모리</span><span class="badge badge-success">가격</span><span class="badge badge-success">공급</span>
+                </div>
+                <p class="news-snippet">&quot;올 2분기 메모리 3사 평균 영업이익률 80%&quot; 고부가·범용 등 메모리 제품 수익성 동시 개선 메모리사 가격 협상력↑…LTA도 긍정적 요인.</p>
+                <div class="insight-bar">
+                    <span class="insight-label">당사 인사이트</span>
+                    <span class="insight-text">메모리 업황 참고 → 주간 시황 보고 및 분기 구매 계획 수립 시 배경 자료로 활용</span>
+                </div>
+                <div class="extra-sources"><span class="extra-sources-label">관련 기사 (2건)</span><div class="extra-sources-links"><a href="https://www.donga.com/news/Economy/article/all/20260708/134255339/2" target="_blank" rel="noopener" class="extra-source-link">📎 동아일보 — “메모리 3사 2분기 영업이익률 80% 육박”…</a><a href="https://korea.counterpointresearch.com/memory-market-q2-2026-record-revenue-profit/" target="_blank" rel="noopener" class="extra-source-link">📎 Counterpoint Research — 2026년 2분기 메모리 시장, 매출 350조·영업이익…</a></div></div>
+                <a href="https://www.newsis.com/view/NISX20260707_0003699570" target="_blank" rel="noopener" class="news-link-btn">원문 보기 →</a>
+            </div>
+            <div class="news-item">
+                <div class="news-item-header">
+                    <span class="news-rank">#14</span>
+                    <a href="https://www.coinreaders.com/246512" target="_blank" rel="noopener" class="news-title">삼성이 쏘아올린 폭탄?...마이크론(MU)·샌디스크(SNDK), 동반 폭락</a>
+                </div>
+                <div class="news-meta">
+                    <span class="badge badge-pending">코인리더스</span>
+                    <span class="news-date">12시간 전</span>
+                    <span class="badge badge-success">마이크론</span><span class="badge badge-success">micron</span><span class="badge badge-success">삼성전자</span>
+                </div>
+                <p class="news-snippet">삼성전자발 인공지능 반도체주 매도세가 뉴욕증시 사상 최고 행진에 제동을 걸었다. 나스닥 선물이 0.9% 밀리고 마이크론(Micron Technology, MU)과 샌디스크(SanDisk,...</p>
+                <div class="insight-bar">
+                    <span class="insight-label">당사 인사이트</span>
+                    <span class="insight-text">경쟁 <strong>공급</strong>사(Micron·Kioxia·SanDisk) 동향 → 삼성·SK <strong>협상</strong> 시 <strong>가격</strong> 벤치마크로 적극 활용</span>
+                </div>
+                
+                <a href="https://www.coinreaders.com/246512" target="_blank" rel="noopener" class="news-link-btn">원문 보기 →</a>
+            </div>
+            <div class="news-item">
+                <div class="news-item-header">
+                    <span class="news-rank">#15</span>
+                    <a href="https://www.apple-economy.com/news/articleView.html?idxno=79439" target="_blank" rel="noopener" class="news-title">샌디스크, “세계 최고 밀도 3D NAND 샘플링”</a>
+                </div>
+                <div class="news-meta">
+                    <span class="badge badge-pending">애플경제</span>
+                    <span class="news-date">8시간 전</span>
+                    <span class="badge badge-success">NAND</span><span class="badge badge-success">메모리</span><span class="badge badge-success">애플</span>
+                </div>
+                <p class="news-snippet">샌디스크가 지난주 업계 최고 수준의 면적 밀도와 성능을 자랑하는 332개 활성 레이어를 갖춘 최신 3D NAND 메모리 샘플링을 시작했다고 발표...</p>
+                <div class="insight-bar">
+                    <span class="insight-label">당사 인사이트</span>
+                    <span class="insight-text"><strong>NAND</strong> 업황 변화 → 스마트폰 <strong>UFS</strong> 조달 전략 수립 시 <strong>TrendForce</strong> 데이터와 병행 참고</span>
+                </div>
+                
+                <a href="https://www.apple-economy.com/news/articleView.html?idxno=79439" target="_blank" rel="noopener" class="news-link-btn">원문 보기 →</a>
+            </div>
+            <div class="news-item">
+                <div class="news-item-header">
+                    <span class="news-rank">#16</span>
+                    <a href="https://www.sisajournal-e.com/news/articleViewAmp.html?idxno=422239" target="_blank" rel="noopener" class="news-title">삼성전자, 하반기 HBM 영토 커질 듯 ···비메모리는 '적자행진' 예상</a>
+                </div>
+                <div class="news-meta">
+                    <span class="badge badge-pending">시사저널e</span>
+                    <span class="news-date">17시간 전</span>
+                    <span class="badge badge-success">메모리</span><span class="badge badge-success">HBM</span><span class="badge badge-success">삼성전자</span>
+                </div>
+                <p class="news-snippet">[시사저널e=고명훈 기자] 삼성전자가 올해 2분기 90조원에 육박하는 영업이익을 기록하며 사상 최대 수준의 어닝 서프라이즈를 기록했다.</p>
+                <div class="insight-bar">
+                    <span class="insight-label">당사 인사이트</span>
+                    <span class="insight-text"><strong>HBM</strong> 동향이 <strong>공급</strong>사 <strong>Capa</strong> 배분에 영향 → <strong>LP<strong>DDR</strong></strong>·<strong>UFS</strong> <strong>수급</strong> 여력 변화 주기적 모니터링 필요</span>
+                </div>
+                <div class="extra-sources"><span class="extra-sources-label">관련 기사 (1건)</span><div class="extra-sources-links"><a href="https://v.daum.net/v/HoMWkoyO7L?f=p" target="_blank" rel="noopener" class="extra-source-link">📎 Daum — 삼성전자, 반도체만 90조 벌었다…“HBM 두 배 오를…</a></div></div>
+                <a href="https://www.sisajournal-e.com/news/articleViewAmp.html?idxno=422239" target="_blank" rel="noopener" class="news-link-btn">원문 보기 →</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- 모니터링 키워드 (하단) -->
+    <div class="card">
+        <p class="card-title">모니터링 키워드</p>
+        <div class="flex-gap">
+            <span class="choice-chip active">LPDDR</span><span class="choice-chip active">DRAM</span><span class="choice-chip active">UFS</span><span class="choice-chip active">NAND</span><span class="choice-chip active">디램</span><span class="choice-chip active">낸드</span><span class="choice-chip active">마이크론</span><span class="choice-chip active">SK하이닉스</span><span class="choice-chip active">hynix</span><span class="choice-chip active">skhynix</span><span class="choice-chip active">micron</span><span class="choice-chip active">키오시아</span><span class="choice-chip active">Kioxia</span><span class="choice-chip active">kioxia</span><span class="choice-chip active">메모리</span><span class="choice-chip active">Memory</span><span class="choice-chip active">YMTC</span><span class="choice-chip active">CXMT</span><span class="choice-chip active">HBM</span><span class="choice-chip active">DDR</span><span class="choice-chip active">가격</span><span class="choice-chip active">공급</span><span class="choice-chip active">TrendForce</span><span class="choice-chip active">trendforce</span><span class="choice-chip active">모바일</span><span class="choice-chip active">mobile</span><span class="choice-chip active">스마트폰</span><span class="choice-chip active">apple</span><span class="choice-chip active">애플</span><span class="choice-chip active">샤오미</span><span class="choice-chip active">XIAOMI</span><span class="choice-chip active">huawei</span><span class="choice-chip active">oppo</span><span class="choice-chip active">vivo</span><span class="choice-chip active">화웨이</span><span class="choice-chip active">오포</span><span class="choice-chip active">비보</span><span class="choice-chip active">삼성전자</span><span class="choice-chip active">sandisk</span><span class="choice-chip active">샌디스크</span>
+        </div>
+    </div>
+
+</div>
+</body>
+</html>
